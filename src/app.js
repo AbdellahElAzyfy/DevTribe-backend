@@ -9,6 +9,7 @@ const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 const healthRoutes = require("./routes/health.routes");
 const authRoutes = require("./routes/auth.routes");
+const communityRoutes = require("./routes/community.routes");
 
 const buildApp = ({ clientOrigin }) => {
   const app = express();
@@ -27,6 +28,7 @@ const buildApp = ({ clientOrigin }) => {
 
   app.use("/api/v1", healthRoutes);
   app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1/communities", communityRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
