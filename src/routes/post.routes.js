@@ -6,6 +6,7 @@ const validateRequest = require("../middleware/validateRequest");
 const uploadFile = require("../middleware/uploadFile");
 const {
   listPostsQuerySchema,
+  feedPostsQuerySchema,
   listMyDraftsQuerySchema,
   createPostSchema,
   postIdParamSchema,
@@ -21,6 +22,7 @@ router.get(
   validateRequest(listMyDraftsQuerySchema),
   postController.listMyDrafts
 );
+router.get("/feed", authenticate, validateRequest(feedPostsQuerySchema), postController.feed);
 router.get("/", validateRequest(listPostsQuerySchema), postController.list);
 router.post(
   "/",

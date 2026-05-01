@@ -13,6 +13,16 @@ const listPostsQuerySchema = z.object({
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(50).optional().default(20),
     sortBy: z.enum(["newest", "oldest", "top"]).optional().default("newest"),
+    cursor: z.string().trim().optional(),
+  }),
+});
+
+const feedPostsQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(50).optional().default(20),
+    sortBy: z.enum(["hot", "top", "newest", "oldest"]).optional().default("hot"),
+    cursor: z.string().trim().optional(),
   }),
 });
 
@@ -67,6 +77,7 @@ const votePostSchema = z.object({
 module.exports = {
   postIdParamSchema,
   listPostsQuerySchema,
+  feedPostsQuerySchema,
   listMyDraftsQuerySchema,
   createPostSchema,
   updatePostSchema,

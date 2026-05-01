@@ -21,6 +21,16 @@ const listMyDrafts = async (req, res, next) => {
   }
 };
 
+const feed = async (req, res, next) => {
+  try {
+    const result = await postService.getFeed(req.validated.query, req.user);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const create = async (req, res, next) => {
   try {
     const payload = {
@@ -104,6 +114,7 @@ const vote = async (req, res, next) => {
 
 module.exports = {
   list,
+  feed,
   listMyDrafts,
   create,
   getById,

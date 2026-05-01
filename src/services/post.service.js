@@ -89,6 +89,10 @@ const getSortOption = (sortBy = "newest") => {
     return { isPinned: -1, voteCount: -1, createdAt: -1 };
   }
 
+  if (sortBy === "hot") {
+    return { isPinned: -1, voteCount: -1, commentCount: -1, createdAt: -1 };
+  }
+
   return { isPinned: -1, createdAt: -1 };
 };
 
@@ -220,7 +224,25 @@ const buildPostUpdatePayload = (payload) => {
   return updates;
 };
 
-const listPosts = async ({ communityId, authorId, page, limit, sortBy } = {}, actor) => {
+const encodeCursor = (item) => {
+  return Buffer.from(
+    JSON.stringify({ createdAt: item.createdAt.toISOString(), id: item._id.toString() })
+  ).toString("base64");
+};
+
+const decodeCursor = (cursor) => {
+  try {
+    const decoded = Buffer.from(cursor, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    return { createdAt: new Date(parsed.createdAt), id: parsed.id };
+  } catch (e) {
+    const error = new Error("Invalid cursor");
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
+const listPosts = async ({ communityId, authorId, page, limit, sortBy, cursor } = {}, actor) => {
   const pagination = buildPagination({ page, limit });
   const filter = [];
   let accessibleCommunityIds = null;
@@ -263,7 +285,48 @@ const listPosts = async ({ communityId, authorId, page, limit, sortBy } = {}, ac
 
   filter.push({ isDraft: false });
 
-  const query = filter.length > 0 ? { $and: filter } : { isDraft: false };
+  const baseQuery = filter.length > 0 ? { $and: filter } : { isDraft: false };
+
+  // If cursor provided and using createdAt ordering (newest/oldest), use cursor pagination
+  if (cursor && (sortBy === "newest" || sortBy === "oldest")) {
+    const { createdAt: cursorCreatedAt, id: cursorId } = decodeCursor(cursor);
+
+    const direction = sortBy === "newest" ? -1 : 1;
+    const comparator = direction === -1 ? "$lt" : "$gt";
+
+    // Add lexicographic cursor filter on (createdAt, _id)
+    const cursorCondition = {
+      $or: [
+        { createdAt: { [comparator]: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, _id: { [comparator]: cursorId } },
+      ],
+    };
+
+    const query = { $and: [baseQuery, cursorCondition] };
+    const sort = getSortOption(sortBy);
+
+    // Fetch one extra to determine next cursor
+    const posts = await Post.find(query)
+      .sort(sort)
+      .limit(pagination.limit + 1)
+      .populate("author", "username avatar role")
+      .populate("community", "name slug description createdBy isPrivate memberCount");
+
+    const hasMore = posts.length > pagination.limit;
+    const pageItems = hasMore ? posts.slice(0, pagination.limit) : posts;
+
+    const nextCursor = hasMore ? encodeCursor(pageItems[pageItems.length - 1]) : null;
+
+    return {
+      posts: pageItems.map((post) => toPublicPost(post)),
+      cursor: nextCursor,
+      limit: pagination.limit,
+      hasMore,
+    };
+  }
+
+  // Fallback: offset pagination for other sorts or when no cursor provided
+  const query = baseQuery;
   const sort = getSortOption(sortBy);
   const skip = (pagination.page - 1) * pagination.limit;
 
@@ -406,8 +469,20 @@ const listMyDrafts = async ({ page, limit, communityId } = {}, actor) => {
   };
 };
 
+const getFeed = async ({ page, limit, sortBy } = {}, actor) => {
+  return listPosts(
+    {
+      page,
+      limit,
+      sortBy: sortBy ?? "hot",
+    },
+    actor
+  );
+};
+
 module.exports = {
   listPosts,
+  getFeed,
   listMyDrafts,
   createPost,
   getPost,
