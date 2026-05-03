@@ -1,5 +1,6 @@
 const postService = require("../services/post.service");
 const voteService = require("../services/vote.service");
+const { deleteCloudinaryFile } = require("../helpers/cloudinary.helpers");
 
 const list = async (req, res, next) => {
   try {
@@ -35,7 +36,7 @@ const create = async (req, res, next) => {
   try {
     const payload = {
       ...req.body,
-      image: req.file?.secure_url || null,
+      image: req.file?.path,
     };
 
     const post = await postService.createPost(payload, req.user);
@@ -45,6 +46,9 @@ const create = async (req, res, next) => {
       post,
     });
   } catch (error) {
+    if (req.file?.filename) {
+      await deleteCloudinaryFile(req.file.filename);
+    }
     return next(error);
   }
 };
@@ -66,7 +70,7 @@ const update = async (req, res, next) => {
     };
 
     if (req.file) {
-      payload.image = req.file.secure_url;
+      payload.image = req.file.path;
     }
 
     const post = await postService.updatePost(req.validated.params.postId, payload, req.user);
@@ -76,6 +80,9 @@ const update = async (req, res, next) => {
       post,
     });
   } catch (error) {
+    if (req.file?.filename) {
+      await deleteCloudinaryFile(req.file.filename);
+    }
     return next(error);
   }
 };

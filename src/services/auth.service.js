@@ -187,6 +187,73 @@ const getCurrentUser = async (userId) => {
   return buildAuthPayload(user);
 };
 
+const updateUserProfile = async (userId, { username, email, bio, avatar }) => {
+  const user = await User.findById(userId);
+
+  if (!user) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Check if new email/username are already in use (by someone else)
+  if (email && email !== user.email) {
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      const error = new Error("Email already in use");
+      error.statusCode = 409;
+      throw error;
+    }
+    user.email = email;
+  }
+
+  if (username && username !== user.username) {
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      const error = new Error("Username already in use");
+      error.statusCode = 409;
+      throw error;
+    }
+    user.username = username;
+  }
+
+  if (bio !== undefined) {
+    user.bio = bio;
+  }
+
+  if (avatar !== undefined) {
+    user.avatar = avatar;
+  }
+
+  await user.save();
+
+  return buildAuthPayload(user);
+};
+
+const changeUserPassword = async (userId, { currentPassword, newPassword }) => {
+  const user = await User.findById(userId).select("+password");
+
+  if (!user) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+
+  if (!passwordMatches) {
+    const error = new Error("Current password is incorrect");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  user.password = hashedPassword;
+  await user.save();
+
+  return buildAuthPayload(user);
+};
+
 module.exports = {
   getCookieOptions,
   registerUser,
@@ -194,4 +261,6 @@ module.exports = {
   refreshSession,
   revokeRefreshToken,
   getCurrentUser,
+  updateUserProfile,
+  changeUserPassword,
 };

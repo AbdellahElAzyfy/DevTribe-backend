@@ -4,8 +4,11 @@ const {
   refreshSession,
   revokeRefreshToken,
   getCurrentUser,
+  updateUserProfile,
+  changeUserPassword,
   getCookieOptions,
 } = require("../services/auth.service");
+const { deleteCloudinaryFile } = require("../helpers/cloudinary.helpers");
 
 const setAuthCookies = (res, _accessToken, refreshToken) => {
   const cookieOptions = getCookieOptions();
@@ -90,10 +93,48 @@ const me = async (req, res, next) => {
   }
 };
 
+const updateProfile = async (req, res, next) => {
+  try {
+    const payload = await updateUserProfile(req.user.id, {
+      username: req.validated.body.username,
+      email: req.validated.body.email,
+      bio: req.validated.body.bio,
+      avatar: req.file?.path,
+    });
+
+    return res.status(200).json({
+      message: "Profile updated successfully",
+      ...payload,
+    });
+  } catch (error) {
+    if (req.file?.filename) {
+      await deleteCloudinaryFile(req.file.filename);
+    }
+    return next(error);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  try {
+    await changeUserPassword(req.user.id, {
+      currentPassword: req.validated.body.currentPassword,
+      newPassword: req.validated.body.newPassword,
+    });
+
+    return res.status(200).json({
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   refresh,
   logout,
   me,
+  updateProfile,
+  changePassword,
 };
