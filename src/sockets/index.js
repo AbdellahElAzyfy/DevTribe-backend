@@ -1,5 +1,7 @@
 const { Server } = require("socket.io");
 
+const authenticateSocket = require("../middleware/socket/authenticateSocket");
+
 const createSocketServer = (httpServer, { clientOrigin }) => {
   const io = new Server(httpServer, {
     cors: {
@@ -8,8 +10,14 @@ const createSocketServer = (httpServer, { clientOrigin }) => {
     },
   });
 
+  io.use(authenticateSocket);
+
   io.on("connection", (socket) => {
     console.log(`Socket connected: ${socket.id}`);
+
+    if (socket.user?.id) {
+      socket.join(`user:${socket.user.id}`);
+    }
 
     socket.on("disconnect", () => {
       console.log(`Socket disconnected: ${socket.id}`);
