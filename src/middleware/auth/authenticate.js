@@ -12,6 +12,49 @@ const extractToken = (req) => {
   return null;
 };
 
+const verifyTokenAndSession = async (token) => {
+  if (!token) {
+    const error = new Error("Access token is required");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const decoded = verifyAccessToken(token);
+  if (!decoded.sid) {
+    const error = new Error("Access token session is invalid");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const activeSession = await RefreshToken.findOne({
+    user: decoded.sub,
+    jti: decoded.sid,
+    revokedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!activeSession) {
+    const error = new Error("Session has been revoked");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const user = await User.findById(decoded.sub);
+
+  if (!user || !user.isActive) {
+    const error = new Error("User account is unavailable");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  return {
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+  };
+};
+
 const authenticate = async (req, res, next) => {
   const token = extractToken(req);
 
@@ -22,49 +65,19 @@ const authenticate = async (req, res, next) => {
   }
 
   try {
-    const decoded = verifyAccessToken(token);
-    if (!decoded.sid) {
-      const error = new Error("Access token session is invalid");
-      error.statusCode = 401;
-      return next(error);
-    }
+    const user = await verifyTokenAndSession(token);
 
-    const activeSession = await RefreshToken.findOne({
-      user: decoded.sub,
-      jti: decoded.sid,
-      revokedAt: null,
-      expiresAt: { $gt: new Date() },
-    });
-
-    if (!activeSession) {
-      const error = new Error("Session has been revoked");
-      error.statusCode = 401;
-      return next(error);
-    }
-
-    const user = await User.findById(decoded.sub);
-
-    if (!user || !user.isActive) {
-      const error = new Error("User account is unavailable");
-      error.statusCode = 401;
-      return next(error);
-    }
-
-    req.user = {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    };
+    req.user = user;
 
     return next();
   } catch (error) {
-    const authError = new Error("Invalid or expired access token");
-    authError.statusCode = 401;
+    const authError = new Error(error.message || "Invalid or expired access token");
+    authError.statusCode = error.statusCode || 401;
     return next(authError);
   }
 };
 
+<<<<<<< HEAD
 const optionalAuthenticate = async (req, res, next) => {
   const token = extractToken(req);
 
@@ -106,3 +119,9 @@ module.exports = {
   authenticate,
   optionalAuthenticate,
 };
+=======
+// Attach verifier to middleware function for backward-compatible import
+authenticate.verifyTokenAndSession = verifyTokenAndSession;
+
+module.exports = authenticate;
+>>>>>>> a1a633d9f75d9ca6fc866864231216151eb95b01
