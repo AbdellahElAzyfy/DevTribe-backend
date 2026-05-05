@@ -1,6 +1,6 @@
 const postService = require("../services/post.service");
 const voteService = require("../services/vote.service");
-const { deleteCloudinaryFile } = require("../helpers/cloudinary.helpers");
+const { deleteFile } = require("../helpers/cloudinary.helpers");
 
 const list = async (req, res, next) => {
   try {
@@ -34,9 +34,18 @@ const feed = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
+    let imageUrl = req.file?.path;
+    if (req.file && !req.file.path.startsWith("http")) {
+      const normalizedPath = req.file.path.replace(/\\/g, "/");
+      const uploadsIndex = normalizedPath.indexOf("/uploads/");
+      if (uploadsIndex !== -1) {
+        imageUrl = normalizedPath.substring(uploadsIndex);
+      }
+    }
+
     const payload = {
       ...req.body,
-      image: req.file?.path,
+      image: imageUrl,
     };
 
     const post = await postService.createPost(payload, req.user);
@@ -46,8 +55,8 @@ const create = async (req, res, next) => {
       post,
     });
   } catch (error) {
-    if (req.file?.filename) {
-      await deleteCloudinaryFile(req.file.filename);
+    if (req.file) {
+      await deleteFile(req.file);
     }
     return next(error);
   }
@@ -70,7 +79,15 @@ const update = async (req, res, next) => {
     };
 
     if (req.file) {
-      payload.image = req.file.path;
+      let imageUrl = req.file.path;
+      if (!req.file.path.startsWith("http")) {
+        const normalizedPath = req.file.path.replace(/\\/g, "/");
+        const uploadsIndex = normalizedPath.indexOf("/uploads/");
+        if (uploadsIndex !== -1) {
+          imageUrl = normalizedPath.substring(uploadsIndex);
+        }
+      }
+      payload.image = imageUrl;
     }
 
     const post = await postService.updatePost(req.validated.params.postId, payload, req.user);
@@ -80,8 +97,8 @@ const update = async (req, res, next) => {
       post,
     });
   } catch (error) {
-    if (req.file?.filename) {
-      await deleteCloudinaryFile(req.file.filename);
+    if (req.file) {
+      await deleteFile(req.file);
     }
     return next(error);
   }
@@ -119,6 +136,24 @@ const vote = async (req, res, next) => {
   }
 };
 
+const toggleSave = async (req, res, next) => {
+  try {
+    const result = await postService.toggleSave(req.validated.params.postId, req.user.id);
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const listSaved = async (req, res, next) => {
+  try {
+    const posts = await postService.listSavedPosts(req.user.id);
+    return res.status(200).json({ posts });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   list,
   feed,
@@ -128,4 +163,6 @@ module.exports = {
   update,
   remove,
   vote,
+  toggleSave,
+  listSaved,
 };

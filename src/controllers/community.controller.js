@@ -2,7 +2,7 @@ const communityService = require("../services/community.service");
 
 const list = async (req, res, next) => {
   try {
-    const communities = await communityService.listCommunities();
+    const communities = await communityService.listCommunities(req.user?.id);
 
     return res.status(200).json({
       communities,
@@ -27,7 +27,7 @@ const create = async (req, res, next) => {
 
 const getBySlug = async (req, res, next) => {
   try {
-    const community = await communityService.getCommunity(req.validated.params.slug);
+    const community = await communityService.getCommunity(req.validated.params.slug, req.user?.id);
 
     return res.status(200).json({
       community,
@@ -56,6 +56,23 @@ const leave = async (req, res, next) => {
 
     return res.status(200).json({
       message: "Left community",
+      community,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const update = async (req, res, next) => {
+  try {
+    const community = await communityService.updateCommunity(
+      req.validated.params.slug,
+      req.validated.body,
+      req.user
+    );
+
+    return res.status(200).json({
+      message: "Community updated successfully",
       community,
     });
   } catch (error) {
@@ -99,6 +116,7 @@ module.exports = {
   getBySlug,
   join,
   leave,
+  update,
   updateRole,
   remove,
 };

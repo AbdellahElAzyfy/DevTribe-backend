@@ -22,11 +22,18 @@ const buildApp = ({ clientOrigin }) => {
       credentials: true,
     })
   );
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: false,
+    })
+  );
   app.use(morgan("dev"));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
   app.use(apiLimiter);
+
+  const path = require("path");
+  app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
 
   app.use("/api/v1", healthRoutes);
   app.use("/api/v1/auth", authRoutes);

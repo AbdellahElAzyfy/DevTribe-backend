@@ -1,7 +1,7 @@
 const express = require("express");
 const authController = require("../controllers/auth.controller");
 const validateRequest = require("../middleware/validateRequest");
-const authenticate = require("../middleware/auth/authenticate");
+const { authenticate } = require("../middleware/auth/authenticate");
 const authorizeRoles = require("../middleware/auth/authorizeRoles");
 const { uploadAvatar } = require("../middleware/uploadFile");
 const {

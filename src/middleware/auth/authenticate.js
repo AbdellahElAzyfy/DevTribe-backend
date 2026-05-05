@@ -65,4 +65,44 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-module.exports = authenticate;
+const optionalAuthenticate = async (req, res, next) => {
+  const token = extractToken(req);
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = verifyAccessToken(token);
+    if (!decoded.sid) return next();
+
+    const activeSession = await RefreshToken.findOne({
+      user: decoded.sub,
+      jti: decoded.sid,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!activeSession) return next();
+
+    const user = await User.findById(decoded.sub);
+    if (!user || !user.isActive) return next();
+
+    req.user = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    };
+
+    return next();
+  } catch (error) {
+    // If token is present but invalid, we still proceed as guest
+    return next();
+  }
+};
+
+module.exports = {
+  authenticate,
+  optionalAuthenticate,
+};

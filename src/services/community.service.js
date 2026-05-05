@@ -1,4 +1,5 @@
 const Community = require("../models/Community");
+const Post = require("../models/Post");
 
 const normalizeSlug = (value) =>
   value
@@ -8,18 +9,27 @@ const normalizeSlug = (value) =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
-const toPublicCommunity = (community) => ({
-  id: community._id,
-  name: community.name,
-  slug: community.slug,
-  description: community.description,
-  createdBy: community.createdBy,
-  isPrivate: community.isPrivate,
-  memberCount: community.memberCount,
-  members: community.members,
-  createdAt: community.createdAt,
-  updatedAt: community.updatedAt,
-});
+const toPublicCommunity = (community, postsCount = 0, actorId = null) => {
+  const isJoined = actorId
+    ? community.members.some(
+        (m) => (m.user._id ?? m.user).toString() === actorId.toString()
+      )
+    : false;
+
+  return {
+    id: community._id,
+    name: community.name,
+    slug: community.slug,
+    description: community.description,
+    createdBy: community.createdBy,
+    isPrivate: community.isPrivate,
+    memberCount: community.memberCount,
+    isJoined,
+    postsCount,
+    createdAt: community.createdAt,
+    updatedAt: community.updatedAt,
+  };
+};
 
 const findCommunityBySlug = async (slug) => {
   const community = await Community.findOne({ slug }).populate(
@@ -52,12 +62,19 @@ const ensureCanManageCommunity = (community, user) => {
   }
 };
 
-const listCommunities = async () => {
+const listCommunities = async (actorId = null) => {
   const communities = await Community.find()
     .sort({ createdAt: -1 })
     .populate("members.user", "username email avatar");
 
-  return communities.map((item) => toPublicCommunity(item));
+  const results = await Promise.all(
+    communities.map(async (community) => {
+      const postsCount = await Post.countDocuments({ community: community._id });
+      return toPublicCommunity(community, postsCount, actorId);
+    })
+  );
+
+  return results;
 };
 
 const createCommunity = async ({ name, description, isPrivate }, userId) => {
@@ -100,12 +117,13 @@ const createCommunity = async ({ name, description, isPrivate }, userId) => {
     memberCount: 1,
   });
 
-  return toPublicCommunity(community);
+  return toPublicCommunity(community, 0, userId);
 };
 
-const getCommunity = async (slug) => {
+const getCommunity = async (slug, actorId = null) => {
   const community = await findCommunityBySlug(slug);
-  return toPublicCommunity(community);
+  const postsCount = await Post.countDocuments({ community: community._id });
+  return toPublicCommunity(community, postsCount, actorId);
 };
 
 const joinCommunity = async (slug, userId) => {
@@ -115,7 +133,8 @@ const joinCommunity = async (slug, userId) => {
   );
 
   if (alreadyJoined) {
-    return toPublicCommunity(community);
+    const postsCount = await Post.countDocuments({ community: community._id });
+    return toPublicCommunity(community, postsCount, userId);
   }
 
   community.members.push({ user: userId, role: "member" });
@@ -123,7 +142,8 @@ const joinCommunity = async (slug, userId) => {
   await community.save();
 
   const updated = await findCommunityBySlug(slug);
-  return toPublicCommunity(updated);
+  const postsCount = await Post.countDocuments({ community: updated._id });
+  return toPublicCommunity(updated, postsCount, userId);
 };
 
 const leaveCommunity = async (slug, userId) => {
@@ -151,7 +171,8 @@ const leaveCommunity = async (slug, userId) => {
   await community.save();
 
   const updated = await findCommunityBySlug(slug);
-  return toPublicCommunity(updated);
+  const postsCount = await Post.countDocuments({ community: updated._id });
+  return toPublicCommunity(updated, postsCount, userId);
 };
 
 const updateMemberRole = async (slug, memberId, role, actor) => {
@@ -178,7 +199,54 @@ const updateMemberRole = async (slug, memberId, role, actor) => {
   await community.save();
 
   const updated = await findCommunityBySlug(slug);
-  return toPublicCommunity(updated);
+  const postsCount = await Post.countDocuments({ community: updated._id });
+  return toPublicCommunity(updated, postsCount, actor.id);
+};
+
+const updateCommunity = async (slug, updates, actor) => {
+  const community = await findCommunityBySlug(slug);
+  ensureCanManageCommunity(community, actor);
+
+  if (updates.name && updates.name !== community.name) {
+    const existingByName = await Community.findOne({
+      name: updates.name.trim(),
+      _id: { $ne: community._id },
+    });
+
+    if (existingByName) {
+      const error = new Error("Community name is already taken");
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const baseSlug = normalizeSlug(updates.name);
+    let nextSlug = baseSlug;
+    let suffix = 1;
+
+    while (
+      await Community.exists({ slug: nextSlug, _id: { $ne: community._id } })
+    ) {
+      suffix += 1;
+      nextSlug = `${baseSlug}-${suffix}`;
+    }
+
+    community.name = updates.name.trim();
+    community.slug = nextSlug;
+  }
+
+  if (updates.description !== undefined) {
+    community.description = updates.description;
+  }
+
+  if (updates.isPrivate !== undefined) {
+    community.isPrivate = updates.isPrivate;
+  }
+
+  await community.save();
+
+  const updated = await findCommunityBySlug(community.slug);
+  const postsCount = await Post.countDocuments({ community: updated._id });
+  return toPublicCommunity(updated, postsCount, actor.id);
 };
 
 const deleteCommunity = async (slug, actor) => {
@@ -195,5 +263,6 @@ module.exports = {
   joinCommunity,
   leaveCommunity,
   updateMemberRole,
+  updateCommunity,
   deleteCommunity,
 };

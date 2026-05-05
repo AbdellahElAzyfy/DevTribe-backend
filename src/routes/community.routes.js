@@ -1,19 +1,21 @@
 const express = require("express");
 
 const communityController = require("../controllers/community.controller");
-const authenticate = require("../middleware/auth/authenticate");
+const { authenticate, optionalAuthenticate } = require("../middleware/auth/authenticate");
 const validateRequest = require("../middleware/validateRequest");
 const {
   createCommunitySchema,
   slugParamSchema,
   updateMemberRoleSchema,
+  updateCommunitySchema,
 } = require("../validators/community.validators");
 
 const router = express.Router();
 
-router.get("/", communityController.list);
+router.get("/", optionalAuthenticate, communityController.list);
 router.post("/", authenticate, validateRequest(createCommunitySchema), communityController.create);
-router.get("/:slug", validateRequest(slugParamSchema), communityController.getBySlug);
+router.patch("/:slug", authenticate, validateRequest(updateCommunitySchema), communityController.update);
+router.get("/:slug", optionalAuthenticate, validateRequest(slugParamSchema), communityController.getBySlug);
 router.post(
   "/:slug/join",
   authenticate,

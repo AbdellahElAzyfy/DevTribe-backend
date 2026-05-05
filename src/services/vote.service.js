@@ -104,6 +104,22 @@ const castVote = async ({ targetType, targetId, value }, actor) => {
   };
 };
 
+const getVotesForTargets = async (targetType, targetIds, userId) => {
+  if (!userId || !targetIds.length) return {};
+
+  const votes = await Vote.find({
+    targetType,
+    targetId: { $in: targetIds },
+    user: userId,
+  });
+
+  return votes.reduce((acc, vote) => {
+    acc[vote.targetId.toString()] = vote.value;
+    return acc;
+  }, {});
+};
+
 module.exports = {
   castVote,
+  getVotesForTargets,
 };

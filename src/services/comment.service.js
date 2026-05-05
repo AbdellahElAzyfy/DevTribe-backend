@@ -60,7 +60,7 @@ const listComments = async (postId, actor, { page = 1, limit = 20 } = {}) => {
   const query = { post: post._id };
   const [comments, total] = await Promise.all([
     Comment.find(query)
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pagination.limit)
       .populate("author", "username avatar role"),

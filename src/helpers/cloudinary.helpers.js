@@ -1,14 +1,22 @@
 const cloudinary = require("../config/cloudinary");
+const fs = require("fs");
 
-const deleteCloudinaryFile = async (filename) => {
-  if (!filename) return;
+const deleteFile = async (file) => {
+  if (!file) return;
 
   try {
-    await cloudinary.uploader.destroy(filename);
+    // If it's a local file (path is an absolute system path)
+    if (file.path && !file.path.startsWith("http")) {
+      if (fs.existsSync(file.path)) {
+        fs.promises.unlink(file.path).catch(() => {});
+      }
+    } else if (file.filename) {
+      // Cloudinary file
+      await cloudinary.uploader.destroy(file.filename);
+    }
   } catch (error) {
-    console.error(`Failed to delete Cloudinary file ${filename}:`, error.message);
-    // Don't throw - we still want the main error to be reported
+    console.error(`Failed to delete file:`, error.message);
   }
 };
 
-module.exports = { deleteCloudinaryFile };
+module.exports = { deleteFile, deleteCloudinaryFile: (filename) => deleteFile({ filename }) };

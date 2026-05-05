@@ -1,7 +1,7 @@
 const express = require("express");
 
 const commentController = require("../controllers/comment.controller");
-const authenticate = require("../middleware/auth/authenticate");
+const { authenticate } = require("../middleware/auth/authenticate");
 const validateRequest = require("../middleware/validateRequest");
 const {
   listCommentsSchema,

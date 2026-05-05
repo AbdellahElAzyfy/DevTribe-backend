@@ -25,8 +25,18 @@ const updateMemberRoleSchema = z.object({
   }),
 });
 
+const updateCommunitySchema = z.object({
+  params: communitySlugParam,
+  body: z.object({
+    name: z.string().trim().min(3).max(80).optional(),
+    description: z.string().trim().max(500).optional(),
+    isPrivate: z.boolean().optional(),
+  }),
+});
+
 module.exports = {
   createCommunitySchema,
   slugParamSchema,
   updateMemberRoleSchema,
+  updateCommunitySchema,
 };

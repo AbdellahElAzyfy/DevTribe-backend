@@ -1,7 +1,7 @@
 const express = require("express");
 
 const postController = require("../controllers/post.controller");
-const authenticate = require("../middleware/auth/authenticate");
+const { authenticate, optionalAuthenticate } = require("../middleware/auth/authenticate");
 const validateRequest = require("../middleware/validateRequest");
 const { uploadFile } = require("../middleware/uploadFile");
 const {
@@ -23,7 +23,7 @@ router.get(
 	postController.listMyDrafts
 );
 router.get("/feed", authenticate, validateRequest(feedPostsQuerySchema), postController.feed);
-router.get("/", validateRequest(listPostsQuerySchema), postController.list);
+router.get("/", optionalAuthenticate, validateRequest(listPostsQuerySchema), postController.list);
 router.post(
 	"/",
 	authenticate,
@@ -31,7 +31,8 @@ router.post(
 	validateRequest(createPostSchema),
 	postController.create
 );
-router.get("/:postId", validateRequest(postIdParamSchema), postController.getById);
+router.get("/saved", authenticate, postController.listSaved);
+router.get("/:postId", optionalAuthenticate, validateRequest(postIdParamSchema), postController.getById);
 router.patch(
 	"/:postId",
 	authenticate,
@@ -41,5 +42,11 @@ router.patch(
 );
 router.delete("/:postId", authenticate, validateRequest(postIdParamSchema), postController.remove);
 router.post("/:postId/vote", authenticate, validateRequest(votePostSchema), postController.vote);
+router.post(
+  "/:postId/save",
+  authenticate,
+  validateRequest(postIdParamSchema),
+  postController.toggleSave
+);
 
 module.exports = router;

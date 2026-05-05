@@ -11,6 +11,8 @@ const {
   ensureCanViewPost,
   buildPagination,
 } = require("../helpers/post.helpers");
+const voteService = require("./vote.service");
+const savedPostService = require("./savedPost.service");
 
 const normalizeTags = (tags) => {
   if (!Array.isArray(tags)) {
@@ -58,7 +60,7 @@ const toPublicCommunity = (community) => {
   };
 };
 
-const toPublicPost = (post) => {
+const toPublicPost = (post, userVote = 0, isSaved = false) => {
   if (!post) {
     return null;
   }
@@ -75,6 +77,8 @@ const toPublicPost = (post) => {
     isPinned: post.isPinned,
     author: toPublicUser(post.author),
     community: toPublicCommunity(post.community),
+    userVote,
+    isSaved,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
   };
@@ -242,17 +246,21 @@ const decodeCursor = (cursor) => {
   }
 };
 
-const listPosts = async ({ communityId, authorId, page, limit, sortBy, cursor } = {}, actor) => {
+const listPosts = async (
+  { communityId, community: communitySlug, authorId, author, page, limit, sortBy, cursor } = {},
+  actor
+) => {
   const pagination = buildPagination({ page, limit });
   const filter = [];
   let accessibleCommunityIds = null;
 
+  // 1. Initial Permission Filter: Restrict to communities the user is allowed to see
   if (!isAdmin(actor)) {
     const accessibleCommunities = await Community.find({
       $or: [{ isPrivate: false }, { "members.user": actor?.id }],
     }).select("_id");
 
-    accessibleCommunityIds = accessibleCommunities.map((community) => community._id);
+    accessibleCommunityIds = accessibleCommunities.map((c) => c._id);
 
     if (accessibleCommunityIds.length === 0) {
       return {
@@ -267,20 +275,24 @@ const listPosts = async ({ communityId, authorId, page, limit, sortBy, cursor } 
     filter.push({ community: { $in: accessibleCommunityIds } });
   }
 
-  if (communityId) {
-    const community = await findCommunityByIdentifier(communityId);
-    ensureCanViewCommunity(community, actor);
-    filter.push({ community: community._id });
+  // 2. Specific Community Filter (by ID or Slug)
+  const communityIdentifier = communityId || communitySlug;
+  if (communityIdentifier) {
+    const resolvedCommunity = await findCommunityByIdentifier(communityIdentifier);
+    ensureCanViewCommunity(resolvedCommunity, actor);
+    filter.push({ community: resolvedCommunity._id });
   }
 
-  if (authorId) {
-    if (!isValidObjectId(authorId)) {
-      const error = new Error("Invalid author id");
+  // 3. Specific Author Filter
+  const resolvedAuthorId = authorId || author;
+  if (resolvedAuthorId) {
+    if (!isValidObjectId(resolvedAuthorId)) {
+      const error = new Error("Invalid author identifier");
       error.statusCode = 400;
       throw error;
     }
 
-    filter.push({ author: authorId });
+    filter.push({ author: resolvedAuthorId });
   }
 
   filter.push({ isDraft: false });
@@ -317,8 +329,14 @@ const listPosts = async ({ communityId, authorId, page, limit, sortBy, cursor } 
 
     const nextCursor = hasMore ? encodeCursor(pageItems[pageItems.length - 1]) : null;
 
+    const postIds = pageItems.map(p => p._id);
+    const userVotes = actor ? await voteService.getVotesForTargets("post", postIds, actor.id) : {};
+    const savedPostIds = actor ? await savedPostService.getSavedPostIds(postIds, actor.id) : new Set();
+
     return {
-      posts: pageItems.map((post) => toPublicPost(post)),
+      posts: pageItems.map((post) => 
+        toPublicPost(post, userVotes[post._id.toString()] || 0, savedPostIds.has(post._id.toString()))
+      ),
       cursor: nextCursor,
       limit: pagination.limit,
       hasMore,
@@ -340,13 +358,18 @@ const listPosts = async ({ communityId, authorId, page, limit, sortBy, cursor } 
     Post.countDocuments(query),
   ]);
 
-  return {
-    posts: posts.map((post) => toPublicPost(post)),
-    page: pagination.page,
-    limit: pagination.limit,
-    total,
-    totalPages: Math.ceil(total / pagination.limit),
-  };
+    const postIds = posts.map(p => p._id);
+    const userVotes = actor ? await voteService.getVotesForTargets("post", postIds, actor.id) : {};
+
+    const savedPostIds = actor ? await savedPostService.getSavedPostIds(postIds, actor.id) : new Set();
+
+    return {
+      posts: posts.map((post) => toPublicPost(post, userVotes[post._id.toString()] || 0, actor ? savedPostIds.has(post._id.toString()) : false)),
+      page: pagination.page,
+      limit: pagination.limit,
+      total,
+      totalPages: Math.ceil(total / pagination.limit),
+    };
 };
 
 const createPost = async (payload, actor) => {
@@ -394,13 +417,16 @@ const createPost = async (payload, actor) => {
     .populate("author", "username avatar role")
     .populate("community", "name slug description createdBy isPrivate memberCount");
 
-  return toPublicPost(createdPost);
+  return toPublicPost(createdPost, 0);
 };
 
 const getPost = async (postId, actor) => {
   const post = await findPostById(postId);
   ensureCanViewPost(post, post.community, actor);
-  return toPublicPost(post);
+  const userVote = actor ? (await Vote.findOne({ targetType: "post", targetId: post._id, user: actor.id }))?.value || 0 : 0;
+  const isSaved = actor ? await savedPostService.isPostSaved(post._id, actor.id) : false;
+
+  return toPublicPost(post, userVote, isSaved);
 };
 
 const updatePost = async (postId, payload, actor) => {
@@ -418,7 +444,7 @@ const updatePost = async (postId, payload, actor) => {
     .populate("author", "username avatar role")
     .populate("community", "name slug description createdBy isPrivate memberCount");
 
-  return toPublicPost(updatedPost);
+  return toPublicPost(updatedPost, 0);
 };
 
 const deletePost = async (postId, actor) => {
@@ -433,7 +459,7 @@ const deletePost = async (postId, actor) => {
   await Comment.deleteMany({ post: post._id });
   await post.deleteOne();
 
-  return toPublicPost(post);
+  return toPublicPost(post, 0);
 };
 
 const listMyDrafts = async ({ page, limit, communityId } = {}, actor) => {
@@ -460,13 +486,18 @@ const listMyDrafts = async ({ page, limit, communityId } = {}, actor) => {
     Post.countDocuments(query),
   ]);
 
-  return {
-    posts: posts.map((post) => toPublicPost(post)),
-    page: pagination.page,
-    limit: pagination.limit,
-    total,
-    totalPages: Math.ceil(total / pagination.limit),
-  };
+    const postIds = posts.map(p => p._id);
+    const userVotes = actor ? await voteService.getVotesForTargets("post", postIds, actor.id) : {};
+
+    const savedPostIds = actor ? await savedPostService.getSavedPostIds(postIds, actor.id) : new Set();
+
+    return {
+      posts: posts.map((post) => toPublicPost(post, userVotes[post._id.toString()] || 0, actor ? savedPostIds.has(post._id.toString()) : false)),
+      page: pagination.page,
+      limit: pagination.limit,
+      total,
+      totalPages: Math.ceil(total / pagination.limit),
+    };
 };
 
 const getFeed = async ({ page, limit, sortBy } = {}, actor) => {
@@ -480,6 +511,18 @@ const getFeed = async ({ page, limit, sortBy } = {}, actor) => {
   );
 };
 
+const toggleSave = async (postId, userId) => {
+  return savedPostService.toggleSave(postId, userId);
+};
+
+const listSavedPosts = async (userId) => {
+  const posts = await savedPostService.listSavedPosts(userId);
+  const postIds = posts.map(p => p._id);
+  const userVotes = await voteService.getVotesForTargets("post", postIds, userId);
+  
+  return posts.map(post => toPublicPost(post, userVotes[post._id.toString()] || 0, true));
+};
+
 module.exports = {
   listPosts,
   getFeed,
@@ -488,5 +531,7 @@ module.exports = {
   getPost,
   updatePost,
   deletePost,
+  toggleSave,
+  listSavedPosts,
   toPublicPost,
 };
