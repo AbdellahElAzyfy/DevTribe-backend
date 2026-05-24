@@ -63,6 +63,8 @@ const castVote = async ({ targetType, targetId, value }, actor) => {
     return {
       targetType: normalizedTargetType,
       targetId: target._id,
+      postId: post?._id,
+      communityId: community?._id,
       value: 0,
       voteCount,
       action: "removed",
@@ -79,6 +81,8 @@ const castVote = async ({ targetType, targetId, value }, actor) => {
     return {
       targetType: normalizedTargetType,
       targetId: target._id,
+      postId: post?._id,
+      communityId: community?._id,
       value: normalizedValue,
       voteCount,
       action: "updated",
@@ -98,6 +102,8 @@ const castVote = async ({ targetType, targetId, value }, actor) => {
   return {
     targetType: normalizedTargetType,
     targetId: target._id,
+    postId: post?._id,
+    communityId: community?._id,
     value: normalizedValue,
     voteCount,
     action: "created",

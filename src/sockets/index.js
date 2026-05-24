@@ -19,6 +19,10 @@ const createSocketServer = (httpServer, { clientOrigin }) => {
       socket.join(`user:${socket.user.id}`);
     }
 
+    // Server-side: join all community rooms the user is a member of (non-blocking)
+    const joinUserRooms = require("./helpers/joinUserRooms");
+    joinUserRooms(socket);
+
     socket.on("disconnect", () => {
       console.log(`Socket disconnected: ${socket.id}`);
     });

@@ -5,6 +5,7 @@ const validateEnv = require("./src/config/validateEnv");
 const { connectDatabase } = require("./src/config/db");
 const { buildApp } = require("./src/app");
 const { createSocketServer } = require("./src/sockets");
+const { setSocketServer } = require("./src/sockets/socketEmitter");
 
 const startServer = async () => {
   validateEnv();
@@ -13,6 +14,7 @@ const startServer = async () => {
   const app = buildApp({ clientOrigin: env.clientOrigin });
   const httpServer = http.createServer(app);
   const io = createSocketServer(httpServer, { clientOrigin: env.clientOrigin });
+  setSocketServer(io);
 
   httpServer.listen(env.port, () => {
     console.log(`DevTribe backend listening on port ${env.port}`);

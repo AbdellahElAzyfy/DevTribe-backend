@@ -77,7 +77,6 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-<<<<<<< HEAD
 const optionalAuthenticate = async (req, res, next) => {
   const token = extractToken(req);
 
@@ -119,9 +118,3 @@ module.exports = {
   authenticate,
   optionalAuthenticate,
 };
-=======
-// Attach verifier to middleware function for backward-compatible import
-authenticate.verifyTokenAndSession = verifyTokenAndSession;
-
-module.exports = authenticate;
->>>>>>> a1a633d9f75d9ca6fc866864231216151eb95b01

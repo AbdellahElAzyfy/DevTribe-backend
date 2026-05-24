@@ -12,6 +12,7 @@ const authRoutes = require("./routes/auth.routes");
 const communityRoutes = require("./routes/community.routes");
 const postRoutes = require("./routes/post.routes");
 const commentRoutes = require("./routes/comment.routes");
+const notificationRoutes = require("./routes/notification.routes");
 
 const buildApp = ({ clientOrigin }) => {
   const app = express();
@@ -40,6 +41,7 @@ const buildApp = ({ clientOrigin }) => {
   app.use("/api/v1/communities", communityRoutes);
   app.use("/api/v1/posts", postRoutes);
   app.use("/api/v1/comments", commentRoutes);
+  app.use("/api/v1/notifications", notificationRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
