@@ -14,7 +14,7 @@ const listPostsQuerySchema = z.object({
     author: z.string().trim().min(1).optional(),
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(50).optional().default(20),
-    sortBy: z.enum(["newest", "oldest", "top"]).optional().default("newest"),
+    sortBy: z.enum(["newest", "oldest", "top", "hot"]).optional().default("newest"),
     cursor: z.string().trim().optional(),
   }),
 });
