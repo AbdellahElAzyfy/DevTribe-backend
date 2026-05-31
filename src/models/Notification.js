@@ -4,7 +4,18 @@ const notificationSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     actor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    type: { type: String, required: true },
+    type: {
+      type: String,
+      enum: [
+        "post_vote",
+        "comment",
+        "comment_reply",
+        "comment_vote",
+        "community_post",
+        "direct_message",
+      ],
+      required: true,
+    },
     data: { type: mongoose.Schema.Types.Mixed, default: {} },
     isRead: { type: Boolean, default: false, index: true },
   },
