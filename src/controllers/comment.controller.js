@@ -41,23 +41,61 @@ const create = async (req, res, next) => {
       actorId: toIdString(req.user.id),
     });
 
+    const actorIdStr = toIdString(req.user.id);
+    const commentIdStr = toIdString(comment.id ?? comment._id);
+    const postIdStr = toIdString(comment.post);
+    const commentSnippet =
+      typeof comment.content === "string" ? comment.content.slice(0, 140) : "";
+
     // Notify post author (if not the actor)
     try {
       const postDoc = await Post.findById(comment.post).select("author title").lean();
-      const recipient = postDoc?.author ? postDoc.author.toString() : null;
-      if (recipient && recipient !== toIdString(req.user.id)) {
+      const postAuthorId = postDoc?.author ? postDoc.author.toString() : null;
+      if (postAuthorId && postAuthorId !== actorIdStr) {
         const notification = await notificationService.createNotification({
-          userId: recipient,
+          userId: postAuthorId,
           actorId: req.user.id,
           type: "comment",
           data: {
-            postId: comment.post.toString(),
+            postId: postIdStr,
             postTitle: postDoc.title,
-            commentId: comment._id.toString(),
-            commentSnippet: typeof comment.content === "string" ? comment.content.slice(0, 140) : "",
+            commentId: commentIdStr,
+            commentSnippet,
           },
         });
-        emitToUser(recipient, "notification:created", notification);
+        emitToUser(postAuthorId, "notification:created", notification);
+      }
+
+      // Notify parent comment author on reply (if not the actor and not the post author)
+      const parentCommentId = toIdString(comment.parentComment);
+      if (parentCommentId) {
+        const parentComment = await Comment.findById(parentCommentId)
+          .select("author content")
+          .lean();
+        const parentAuthorId = parentComment?.author ? parentComment.author.toString() : null;
+        if (
+          parentAuthorId &&
+          parentAuthorId !== actorIdStr &&
+          parentAuthorId !== postAuthorId
+        ) {
+          const notification = await notificationService.createNotification({
+            userId: parentAuthorId,
+            actorId: req.user.id,
+            type: "comment_reply",
+            data: {
+              postId: postIdStr,
+              postTitle: postDoc?.title,
+              commentId: commentIdStr,
+              parentCommentId,
+              parentCommentSnippet:
+                typeof parentComment?.content === "string"
+                  ? parentComment.content.slice(0, 140)
+                  : "",
+              commentSnippet,
+            },
+          });
+          emitToUser(parentAuthorId, "notification:created", notification);
+        }
       }
     } catch (err) {
       // non-fatal: don't block comment creation on notification failure

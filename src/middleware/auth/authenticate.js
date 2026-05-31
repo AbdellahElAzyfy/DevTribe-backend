@@ -117,4 +117,5 @@ const optionalAuthenticate = async (req, res, next) => {
 module.exports = {
   authenticate,
   optionalAuthenticate,
+  verifyTokenAndSession,
 };
