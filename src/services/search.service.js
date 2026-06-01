@@ -58,7 +58,7 @@ const searchPosts = async (q, { page, limit } = {}, actor) => {
   const skip = (pagination.page - 1) * pagination.limit;
   const regex = buildQueryRegex(q);
 
-  const filter = [{ isDraft: false }, {
+  const filter = [{ isDraft: false }, { isApproved: true }, {
     $or: [{ title: regex }, { content: regex }, { tags: regex }],
   }];
 

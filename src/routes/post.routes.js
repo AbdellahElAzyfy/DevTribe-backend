@@ -32,6 +32,9 @@ router.post(
 	postController.create
 );
 router.get("/saved", authenticate, postController.listSaved);
+router.get("/community/:identifier/pending", authenticate, postController.listPending);
+router.patch("/:postId/approve", authenticate, validateRequest(postIdParamSchema), postController.approve);
+router.delete("/:postId/decline", authenticate, validateRequest(postIdParamSchema), postController.decline);
 router.get("/:postId", optionalAuthenticate, validateRequest(postIdParamSchema), postController.getById);
 router.patch(
 	"/:postId",

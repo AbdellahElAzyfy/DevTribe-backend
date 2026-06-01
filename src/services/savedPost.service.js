@@ -31,7 +31,7 @@ const listSavedPosts = async (userId) => {
     });
 
   return saved
-    .filter(item => item.post) // Filter out deleted posts
+    .filter(item => item.post && item.post.isApproved !== false) // Filter out deleted or pending posts
     .map(item => item.post);
 };
 

@@ -12,6 +12,8 @@ const notificationSchema = new mongoose.Schema(
         "comment_reply",
         "comment_vote",
         "community_post",
+        "post_pending_moderation",
+        "post_approved",
         "direct_message",
       ],
       required: true,

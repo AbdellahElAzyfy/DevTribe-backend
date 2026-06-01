@@ -75,6 +75,7 @@ const toPublicPost = (post, userVote = 0, isSaved = false) => {
     commentCount: post.commentCount,
     isDraft: post.isDraft,
     isPinned: post.isPinned,
+    isApproved: post.isApproved !== false,
     author: toPublicUser(post.author),
     community: toPublicCommunity(post.community),
     userVote,
@@ -297,7 +298,14 @@ const listPosts = async (
 
   filter.push({ isDraft: false });
 
-  const baseQuery = filter.length > 0 ? { $and: filter } : { isDraft: false };
+  const isOwnAuthorView =
+    actor?.id && resolvedAuthorId && resolvedAuthorId.toString() === actor.id.toString();
+
+  if (!isAdmin(actor) && !isOwnAuthorView) {
+    filter.push({ isApproved: true });
+  }
+
+  const baseQuery = filter.length > 0 ? { $and: filter } : { isDraft: false, isApproved: true };
 
   // If cursor provided and using createdAt ordering (newest/oldest), use cursor pagination
   if (cursor && (sortBy === "newest" || sortBy === "oldest")) {
@@ -396,11 +404,15 @@ const createPost = async (payload, actor) => {
   const community = await findCommunityByIdentifier(communityIdentifier);
   ensureCanCreatePost(community, actor);
 
-  if (isPinned && !isAdmin(actor) && !isCommunityModerator(community, actor)) {
+  const canModerate = isAdmin(actor) || isCommunityModerator(community, actor);
+
+  if (isPinned && !canModerate) {
     const error = new Error("You are not allowed to pin posts");
     error.statusCode = 403;
     throw error;
   }
+
+  const isApproved = isDraft ? false : canModerate;
 
   const post = await Post.create({
     title,
@@ -409,6 +421,7 @@ const createPost = async (payload, actor) => {
     tags,
     isDraft,
     isPinned,
+    isApproved,
     author: actor.id,
     community: community._id,
   });
@@ -447,10 +460,7 @@ const updatePost = async (postId, payload, actor) => {
   return toPublicPost(updatedPost, 0);
 };
 
-const deletePost = async (postId, actor) => {
-  const post = await findPostById(postId);
-  ensureCanDeletePost(post, actor);
-
+const removePostCascade = async (post) => {
   await Vote.deleteMany({ targetType: "post", targetId: post._id });
   const commentIds = await Comment.find({ post: post._id }).distinct("_id");
   if (commentIds.length > 0) {
@@ -458,8 +468,74 @@ const deletePost = async (postId, actor) => {
   }
   await Comment.deleteMany({ post: post._id });
   await post.deleteOne();
+};
+
+const deletePost = async (postId, actor) => {
+  const post = await findPostById(postId);
+  ensureCanDeletePost(post, actor);
+
+  await removePostCascade(post);
 
   return toPublicPost(post, 0);
+};
+
+const ensureCanModerateCommunity = (community, actor) => {
+  if (isAdmin(actor)) {
+    return;
+  }
+
+  if (!isCommunityModerator(community, actor)) {
+    const error = new Error("You are not allowed to moderate this community");
+    error.statusCode = 403;
+    throw error;
+  }
+};
+
+const listPendingPosts = async (communityIdentifier, actor) => {
+  const community = await findCommunityByIdentifier(communityIdentifier);
+  ensureCanModerateCommunity(community, actor);
+
+  const posts = await Post.find({
+    community: community._id,
+    isApproved: false,
+    isDraft: false,
+  })
+    .sort({ createdAt: 1 })
+    .populate("author", "username avatar role")
+    .populate("community", "name slug description createdBy isPrivate memberCount");
+
+  return {
+    posts: posts.map((post) => toPublicPost(post, 0, false)),
+    total: posts.length,
+    community: toPublicCommunity(community),
+  };
+};
+
+const approvePost = async (postId, actor) => {
+  const post = await findPostById(postId);
+  ensureCanModerateCommunity(post.community, actor);
+
+  if (post.isApproved) {
+    return toPublicPost(post, 0, false);
+  }
+
+  post.isApproved = true;
+  await post.save();
+
+  const refreshed = await Post.findById(post._id)
+    .populate("author", "username avatar role")
+    .populate("community", "name slug description createdBy isPrivate memberCount");
+
+  return toPublicPost(refreshed, 0, false);
+};
+
+const declinePost = async (postId, actor) => {
+  const post = await findPostById(postId);
+  ensureCanModerateCommunity(post.community, actor);
+
+  const snapshot = toPublicPost(post, 0, false);
+  await removePostCascade(post);
+  return snapshot;
 };
 
 const listMyDrafts = async ({ page, limit, communityId } = {}, actor) => {
@@ -533,5 +609,9 @@ module.exports = {
   deletePost,
   toggleSave,
   listSavedPosts,
+  listPendingPosts,
+  approvePost,
+  declinePost,
   toPublicPost,
+  isCommunityModerator,
 };

@@ -10,11 +10,13 @@ const normalizeSlug = (value) =>
     .replace(/-+/g, "-");
 
 const toPublicCommunity = (community, postsCount = 0, actorId = null) => {
-  const isJoined = actorId
-    ? community.members.some(
+  const membership = actorId
+    ? community.members.find(
         (m) => (m.user._id ?? m.user).toString() === actorId.toString()
       )
-    : false;
+    : null;
+  const isJoined = Boolean(membership);
+  const viewerRole = membership?.role ?? null;
 
   return {
     id: community._id,
@@ -25,6 +27,7 @@ const toPublicCommunity = (community, postsCount = 0, actorId = null) => {
     isPrivate: community.isPrivate,
     memberCount: community.memberCount,
     isJoined,
+    viewerRole,
     postsCount,
     createdAt: community.createdAt,
     updatedAt: community.updatedAt,

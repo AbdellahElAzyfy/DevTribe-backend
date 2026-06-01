@@ -113,6 +113,10 @@ const ensureCanViewPost = (post, community, actor) => {
   }
 
   const membership = getCommunityMembership(community, actor?.id);
+  const isAuthor = post.author?._id?.toString() === actor?.id?.toString();
+  const isModerator = Boolean(
+    membership && ["owner", "moderator"].includes(membership.role)
+  );
 
   if (community.isPrivate && !membership) {
     const error = new Error("You do not have access to this resource");
@@ -120,7 +124,13 @@ const ensureCanViewPost = (post, community, actor) => {
     throw error;
   }
 
-  if (post.isDraft && post.author._id.toString() !== actor?.id?.toString()) {
+  if (post.isDraft && !isAuthor) {
+    const error = new Error("You do not have access to this resource");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (post.isApproved === false && !isAuthor && !isModerator) {
     const error = new Error("You do not have access to this resource");
     error.statusCode = 403;
     throw error;

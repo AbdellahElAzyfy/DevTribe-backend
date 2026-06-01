@@ -46,6 +46,11 @@ const postSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isApproved: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     tags: {
       type: [String],
       default: [],
@@ -58,5 +63,6 @@ const postSchema = new mongoose.Schema(
 postSchema.index({ community: 1, createdAt: -1 });
 postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ isPinned: -1, createdAt: -1 });
+postSchema.index({ isApproved: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Post", postSchema);
