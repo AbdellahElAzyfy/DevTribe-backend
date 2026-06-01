@@ -1,8 +1,50 @@
 const User = require("../models/User");
 const Post = require("../models/Post");
+const Community = require("../models/Community");
+const { isAdmin } = require("../helpers/post.helpers");
 
 const isValidObjectId = (id) => {
   return id && /^[0-9a-fA-F]{24}$/.test(id.toString());
+};
+
+/**
+ * Fetch a user's posts as the given viewer (`actor`), applying the same
+ * visibility rules as the main post feed (see post.service `listPosts`):
+ *   - only communities the viewer can see (public, or private + member)
+ *   - never drafts
+ *   - only approved posts, unless the viewer is an admin or viewing their own
+ *     profile (so you still see your own pending posts on your own page)
+ *
+ * `actor` is null for unauthenticated requests, which restricts results to
+ * public communities and approved posts only.
+ */
+const getAccessiblePostsForAuthor = async (authorId, actor) => {
+  const filter = [{ author: authorId }, { isDraft: false }];
+
+  if (!isAdmin(actor)) {
+    const accessibleCommunities = await Community.find({
+      $or: [{ isPrivate: false }, { "members.user": actor?.id }],
+    }).select("_id");
+
+    filter.push({ community: { $in: accessibleCommunities.map((c) => c._id) } });
+  }
+
+  const isOwnProfile = actor?.id && actor.id.toString() === authorId.toString();
+  if (!isAdmin(actor) && !isOwnProfile) {
+    filter.push({ isApproved: true });
+  }
+
+  const [posts, postCount] = await Promise.all([
+    Post.find({ $and: filter })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate("author", "username avatar role")
+      .populate("community", "name slug")
+      .lean(),
+    Post.countDocuments({ $and: filter }),
+  ]);
+
+  return { posts, postCount };
 };
 
 const toPublicUser = (user) => {
@@ -18,7 +60,7 @@ const toPublicUser = (user) => {
   };
 };
 
-const getUserByUsername = async (username) => {
+const getUserByUsername = async (username, actor = null) => {
   if (!username || typeof username !== "string") {
     const error = new Error("Username is required");
     error.statusCode = 400;
@@ -40,14 +82,7 @@ const getUserByUsername = async (username) => {
     throw error;
   }
 
-  const posts = await Post.find({ author: user._id, isDraft: false })
-    .sort({ createdAt: -1 })
-    .limit(20)
-    .populate("author", "username avatar role")
-    .populate("community", "name slug")
-    .lean();
-
-  const postCount = await Post.countDocuments({ author: user._id, isDraft: false });
+  const { posts, postCount } = await getAccessiblePostsForAuthor(user._id, actor);
 
   return {
     user: toPublicUser(user),
@@ -58,7 +93,7 @@ const getUserByUsername = async (username) => {
   };
 };
 
-const getUserById = async (userId) => {
+const getUserById = async (userId, actor = null) => {
   if (!isValidObjectId(userId)) {
     const error = new Error("Invalid user id");
     error.statusCode = 400;
@@ -73,14 +108,7 @@ const getUserById = async (userId) => {
     throw error;
   }
 
-  const posts = await Post.find({ author: user._id, isDraft: false })
-    .sort({ createdAt: -1 })
-    .limit(20)
-    .populate("author", "username avatar role")
-    .populate("community", "name slug")
-    .lean();
-
-  const postCount = await Post.countDocuments({ author: user._id, isDraft: false });
+  const { posts, postCount } = await getAccessiblePostsForAuthor(user._id, actor);
 
   return {
     user: toPublicUser(user),

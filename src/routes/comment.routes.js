@@ -1,7 +1,7 @@
 const express = require("express");
 
 const commentController = require("../controllers/comment.controller");
-const { authenticate } = require("../middleware/auth/authenticate");
+const { authenticate, optionalAuthenticate } = require("../middleware/auth/authenticate");
 const validateRequest = require("../middleware/validateRequest");
 const {
   listCommentsSchema,
@@ -13,7 +13,12 @@ const {
 
 const router = express.Router();
 
-router.get("/post/:postId", validateRequest(listCommentsSchema), commentController.listByPost);
+router.get(
+  "/post/:postId",
+  optionalAuthenticate,
+  validateRequest(listCommentsSchema),
+  commentController.listByPost
+);
 router.post(
   "/post/:postId",
   authenticate,
