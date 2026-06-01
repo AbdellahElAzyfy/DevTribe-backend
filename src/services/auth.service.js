@@ -23,12 +23,18 @@ const buildAuthPayload = (user) => ({
   },
 });
 
-const getCookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
-  path: "/api/v1/auth",
-});
+const getCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  return {
+    httpOnly: true,
+    // Cross-site (Vercel frontend -> Azure backend) requires SameSite=None,
+    // which the browser only accepts when the cookie is also Secure.
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/api/v1/auth",
+  };
+};
 
 const createTokenPair = async (user) => {
   const jti = createJti();

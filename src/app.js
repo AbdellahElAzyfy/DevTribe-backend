@@ -20,6 +20,11 @@ const searchRoutes = require("./routes/search.routes");
 const buildApp = ({ clientOrigin }) => {
   const app = express();
 
+  // Azure App Service sits behind a reverse proxy. Trusting the first proxy
+  // hop makes req.ip resolve to the real client (via X-Forwarded-For) instead
+  // of the proxy's address, so rate limiting is per-user rather than global.
+  app.set("trust proxy", 1);
+
   app.use(
     cors({
       origin: clientOrigin,
